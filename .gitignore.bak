@@ -90,4 +90,5 @@ target/
 
 # Mypy cache
 .mypy_cache/
-.bak
+.py.bak
+*.bak
