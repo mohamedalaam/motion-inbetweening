@@ -5,12 +5,12 @@ import yaml
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.append("..")
-
+import h5py
 import numpy as np
 import extract, utils
 
 class LaFan1(Dataset):
-    def __init__(self, bvh_path, train = False, seq_len = 50, offset = 10):
+    def __init__(self, bvh_path, train = False, seq_len = 50, offset = 10,reprocess=True):
         """
         Args:
             bvh_path (string): Path to the bvh files.
@@ -23,15 +23,27 @@ class LaFan1(Dataset):
         self.train = train
         self.seq_len = seq_len
         self.offset = offset
-        self.data = self.load_data(bvh_path)
+        self.data = self.load_data(bvh_path,reprocess)
         self.cur_seq_length = 5
-        
 
-    def load_data(self, bvh_path):
+        
+    def load_h5f(self,path):
+        parents = [-1, 0, 1, 2, 3, 0, 5, 6, 7, 0, 9, 10, 11, 12, 11, 14, 15, 16, 11, 18, 19, 20]
+        with h5py.File(path, 'r') as hf:
+            X = hf['X'][:]
+            Q = hf['Q'][:]
+            contacts_l = hf['contacts_l'][:]
+            contacts_r = hf['contacts_r'][:]
+        return X,Q,contacts_l,contacts_r,parents
+
+    def load_data(self, bvh_path,reprocess):
         # Get test-set for windows of 65 frames, offset by 40 frames
         print('Building the data set...')
-        X, Q, parents, contacts_l, contacts_r = extract.get_lafan1_set(\
-                                                bvh_path, self.actors, window=self.seq_len, offset=self.offset)
+        if reprocess:
+            X, Q, parents, contacts_l, contacts_r = extract.get_lafan1_set(\
+                                              bvh_path, self.actors, window=self.seq_len, offset=self.offset)
+        else:
+            X,Q,contacts_l,contacts_r,parents = self.load_h5f(bvh_path)
         # Global representation:
         q_glbl, x_glbl = utils.quat_fk(Q, X, parents)
 
@@ -76,11 +88,8 @@ class LaFan1(Dataset):
         return len(self.data['local_q'])
 
     def __getitem__(self, idx):
-        idx_ = None
-        if self.debug:
-            idx_ = 0
-        else:
-            idx_ = idx
+
+        idx_ = idx
         sample = {}
         sample['local_q'] = self.data['local_q'][idx_].astype(np.float32)
         sample['root_v'] = self.data['root_v'][idx_].astype(np.float32)

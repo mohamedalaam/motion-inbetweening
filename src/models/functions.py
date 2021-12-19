@@ -1,8 +1,8 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from quaternion import qeuler_np
-from remove_fs import remove_fs
+from src.quaternion import qeuler_np
+#from src.remove_fs import remove_fs
 
 def PLU(x, alpha = 0.1, c = 1.0):
     relu = nn.ReLU()
@@ -30,7 +30,7 @@ def gen_ztar(sigma = 1.0, length = 50):
         if t < 5:
             lambda_tar.append(0)
         elif t < 30 and t >= 5:
-            lambda_tar.append((t - 5.0) / 25.0)
+            lambda_tar.append((t - 5.0) / 25.0)#
         else:
             lambda_tar.append(1)
     lambda_tar = np.array(lambda_tar)
