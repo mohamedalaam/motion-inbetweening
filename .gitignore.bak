@@ -1,5 +1,5 @@
 venv
-data/lafan1
+./data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -90,3 +90,5 @@ target/
 
 # Mypy cache
 .mypy_cache/
+.py.bak
+*.bak
