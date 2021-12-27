@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from src.features.LaFan import LaFan1
 from torch.utils.data import Dataset, DataLoader
-from model import StateEncoder, \
+from components import StateEncoder, \
                   OffsetEncoder, \
                   TargetEncoder, \
                   LSTM, \
@@ -25,6 +25,11 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 from src.features.remove_fs import remove_fs, save_bvh_from_network_output
 from src.foot_sliding.animation_data import y_rotation_from_positions
 from PIL import Image
+
+
+class Test:
+    pass
+
 
 def plot_pose(pose, cur_frame, prefix):
     
@@ -69,7 +74,6 @@ def plot_pose(pose, cur_frame, prefix):
 if __name__ == '__main__':
     opt = yaml.load(open('./config/test-base.yaml', 'r').read())
     model_dir =opt['test']['model_dir']
-
     
     ## initilize the skeleton ##
     skeleton_mocap = Skeleton(offsets=opt['data']['offsets'], parents=opt['data']['parents'])
@@ -115,7 +119,8 @@ if __name__ == '__main__':
     
     # writer = SummaryWriter(log_dir)
     loss_total_min = 10000000.0
-    for epoch in range(opt['test']['num_epoch']):
+    for epoch in range(opt['test']
+                       ['num_epoch']):
         state_encoder.eval()
         offset_encoder.eval()
         target_encoder.eval()

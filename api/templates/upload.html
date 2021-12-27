@@ -2,25 +2,39 @@
 <head>
     <meta charset="UTF-8">
     <title>ML API</title>
-       <link rel="stylesheet" href="{{ url_for('static', filename='css/upload_style.css') }}">
         <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/upload_style.css') }}">
 
 </head>
 <body>
-<div class="page-header">
-    <h1 class="h1">Motion in betweening </h1>
-</div>
+
+<nav class="navbar navbar-light bg-light justify-content-between">
+  <a class="navbar-brand">
+      <span class="my-title">
+           Motion in between
+      </span>
+     </a>
+</nav>
+
+<!--<div class="page-header">-->
+<!--    <h1 class="h1">Motion in betweening </h1>-->
+<!--</div>-->
+
 <div class="container">
     <div class="row">
-        <div class="col-md-4">4</div>
-        <div class="col-md-4">4</div>
+    <div class="col-md-2"> 2 </div>
+    <div class="col-md-6 gif-container">
+        5
+    </div>
+    <div class="col-md-2"> 2 </div>
 
-        <div class="col-md-4">
+
+    </div>
+     <div class="col-md-4">
         <form  action="http://localhost:5000/uploader" method = "POST"  enctype="multipart/form-data">
             <input type="file" id="file" name="file" multiple="multiple" />
             <p> <input type="submit" value="Upload Files" class="btn btn-lg btn-primary" /> </p>
         </form>
-    </div>
     </div>
     <div class="col"></div>
 

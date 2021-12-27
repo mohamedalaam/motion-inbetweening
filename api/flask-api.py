@@ -3,8 +3,12 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import  FileStorage
 from flask import send_from_directory
 import os
-
+from src.utils import get_project_path
+ROOT_DIR=get_project_path()
+from model.inference import  InferModel
 app = Flask(__name__)
+
+model=InferModel()
 
 
 @app.route('/')
@@ -16,8 +20,10 @@ def upload_file_1():
     if request.method == 'POST':
         f = request.files['file']
         print(secure_filename(f.filename))
-        path_to_save=os.path.join('uploaded_files', secure_filename(f.filename))
+        path_to_save=os.path.join(ROOT_DIR,'api','uploaded_files', secure_filename(f.filename))
         f.save(path_to_save)
+        data=model.load_BVH_file('uploaded_files')
+        print(data)
         return 'file uploaded successfully'
 
 @app.route('/downloads')

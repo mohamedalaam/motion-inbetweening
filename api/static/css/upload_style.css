@@ -1,3 +1,20 @@
+.navbar{
+    background: #0077BB !important;
+    color: #FFF !important;
+    padding:10px
+}
+.navbar-brand span{
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.gif-container{
+    height: 150px !important;
+    width: 200px !important;
+    border: 1px solid #DDD !important;
+    border-radius: 25px !important  ;
+}
+
 .h1 {
     text-align: center;
     margin-top: 20px;
