@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 app = FastAPI()
 app.mount("/static/", StaticFiles(directory="static"), name="static")
 
-
+inference_model=InferModel()
 templates = Jinja2Templates(directory="templates")
 
 
@@ -33,10 +33,12 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
         return RedirectResponse("http://127.0.0.1:8000/", status_code=303)
 
     # Use gif function
+    inference_model.infer(file_path='uploaded_files')
     # Use bvh function
 
     gif_src = "test.gif"
     filename = file.filename
+
 
     return templates.TemplateResponse("index.html", {"request": request, "gif_src": gif_src, "filename": filename})
 
