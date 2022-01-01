@@ -7,6 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 from fastapi.responses import RedirectResponse
 
+from api.model.inference import InferModel
+
 app = FastAPI()
 app.mount("/static/", StaticFiles(directory="static"), name="static")
 

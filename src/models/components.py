@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from functions import PLU
+from src.models.functions import PLU
 
 
 class StateEncoder(nn.Module):

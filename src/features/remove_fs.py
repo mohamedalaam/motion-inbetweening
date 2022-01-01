@@ -9,9 +9,9 @@ from os.path import join as pjoin
 sys.path.insert(0, BASEPATH)
 sys.path.insert(0, pjoin(BASEPATH, '../../../..'))
 
-import foot_sliding.BVH as BVH
-from foot_sliding.InverseKinematics import JacobianInverseKinematics
-from foot_sliding.animation_data import AnimationData
+import src.foot_sliding.BVH as BVH
+from src.foot_sliding.InverseKinematics import JacobianInverseKinematics
+from src.foot_sliding.animation_data import AnimationData
 
 
 def softmax(x, **kw):
