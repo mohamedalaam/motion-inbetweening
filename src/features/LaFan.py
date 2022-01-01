@@ -1,13 +1,14 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
-import yaml
+from torch.utils.data import Dataset
 
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.append("..")
 import h5py
 import numpy as np
-import extract, utils
+import extract
+from src.features import utils
+
 
 class LaFan1(Dataset):
     def __init__(self, bvh_path, train = False, seq_len = 50, offset = 10,reprocess=True):

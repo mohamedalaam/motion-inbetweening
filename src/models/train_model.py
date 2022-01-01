@@ -4,7 +4,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from src.features.LaFan import LaFan1
 from torch.utils.data import Dataset, DataLoader
-from model import StateEncoder, \
+from components import StateEncoder, \
     OffsetEncoder, \
     TargetEncoder, \
     LSTM, \

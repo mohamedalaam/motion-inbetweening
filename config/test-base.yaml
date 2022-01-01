@@ -60,3 +60,5 @@ test:
     debug: False
     version: '3'
     model_dir: '/content/drive/MyDrive/Pytorch-Robust-Motion-In-betweening/model'
+    bvh_results_path: ''
+

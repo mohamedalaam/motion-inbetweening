@@ -1,6 +1,6 @@
 import re, os, ntpath
 import numpy as np
-import utils
+from src.features import utils
 
 channelmap = {
     'Xrotation': 'x',
@@ -202,7 +202,7 @@ def get_lafan1_set(bvh_path, actors, window=50, offset=20):
                 # Sliding windows
                 i = 0
                 while i+window < anim.pos.shape[0]:
-                    q, x = utils.quat_fk(anim.quats[i: i+window], anim.pos[i: i+window], anim.parents)
+                    q, x = utils.quat_fk(anim.quats[i: i + window], anim.pos[i: i + window], anim.parents)
                     # Extract contacts
                     c_l, c_r = utils.extract_feet_contacts(x, [3, 4], [7, 8], velfactor=0.02)
                     X.append(anim.pos[i: i+window])
