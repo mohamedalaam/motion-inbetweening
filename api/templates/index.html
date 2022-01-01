@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Motion In-betweening</title>
+<!--        <link href="../images/icon.png" type="image/gif" rel="icon" />-->
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', path='/css/style.css') }}">
+        <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@200&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css?family=Lato:400,700,300" rel="stylesheet">
+        <title>Motion In-betweening</title>
+    </head>
+    <body>
+
+        <div class="title">
+            <p>Motion In-betweening</p>
+        </div>
+
+        <form action="http://127.0.0.1:8000/generate/" method="post" class="file-upload"  enctype = "multipart/form-data">
+            <div class="file-select">
+                <div class="file-select-button" id="fileName">UPLOAD</div>
+                <div class="file-select-name" id="noFile">No file chosen...</div>
+                <input type="file" name="file" id="chooseFile">
+          </div>
+
+            <div class="generate-bvh">
+                <input class="btn" type="submit" name="generate" value="Generate">
+            </div>
+        </form>
+        <div class="gif-img">
+            <img src="{{url_for('static', path=gif_src)}}"/>
+        </div>
+
+        <form action="{{'http://127.0.0.1:8000/download/'+filename}}" method="get" class="download-bvh">
+            <button class="btn">
+                <i class="fa fa-download"></i>
+                <span>Download BVH</span>
+            </button>
+        </form>
+
+        <script type="text/javascript" src="{{ url_for('static', path='/lib/jquery-3.6.0.min.js')}}"></script>
+        <script type="text/javascript" src="{{ url_for('static', path='/js/script.js')}}"></script>
+
+    </body>
+</html>
