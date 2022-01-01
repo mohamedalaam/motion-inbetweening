@@ -9,12 +9,14 @@ from src.models.functions import gen_ztta, write_to_bvhfile
 
 
 class Model:
-    def __init__(self, load_pre_trained=True):
+    def __init__(self, load_pre_trained=True,results_path=None):
         self.test_configrations = yaml.load(open('../../config/test-base.yaml', 'r').read())
         self.train_configrations = yaml.load(open('../../config/train-base.yaml', 'r').read())
+        self.results_path=results_path
         self.load_components()
         if load_pre_trained:
             self.load_pre_trained()
+        self.x_std=None
 
         self.skeleton_mocap = Skeleton(offsets=self.test_configrations['data']['offsets'],
                                        parents=self.test_configrations['data']['parents'])
@@ -82,9 +84,9 @@ class Model:
         lafan_dataloader= self.create_dataloader(lafan_dataset)
         self.set_eval_mode()
         for i_batch, sampled_batch in enumerate(lafan_dataloader):
-
-            (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root) =self.generate_seq(sampled_batch)
-            self.save_results(contact_list=contact_list,pred_list=pred_list,bvh_list=bvh_list)
+            with torch.no_grad():
+                (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root) =self.generate_seq(sampled_batch)
+                self.save_results(contact_list=contact_list,pred_list=pred_list,bvh_list=bvh_list,i_batch=i_batch)
 
 
 
@@ -200,14 +202,14 @@ class Model:
     output: image_list contains image for each frame in the sequence
     we could use it to build our gif
     '''
-    def save_gif(self, pred_list):
+    def save_gif(self, pred_list,path_to_save):
         pass
 
-    def save_bvh(self,contact_list, bvh_list):
+    def save_bvh(self,contact_list, bvh_list,i_batch,path_to_save):
         bs=6
         bvh_data = torch.cat([x[bs].unsqueeze(0) for x in bvh_list], 0).detach().cpu().numpy()
         write_to_bvhfile(bvh_data,
-                         ('/content/drive/MyDrive/Pytorch-Robust-Motion-In-betweening/bvh_seq/test_%03d.bvh' % i_batch),
+                         (path_to_save+'/test_%03d.bvh' % i_batch),
                          self.test_configrations['data']['joints_to_remove'])
 
         contact_data = torch.cat([x[bs].unsqueeze(0) for x in contact_list], 0).detach().cpu().numpy()
@@ -215,16 +217,18 @@ class Model:
         foot[foot > 0.5] = 1.0
         foot[foot <= 0.5] = 0.0
 
-        glb = remove_fs(('/content/drive/MyDrive/Pytorch-Robust-Motion-In-betweening/bvh_seq/test_%03d.bvh' % i_batch), \
+        glb = remove_fs((path_to_save+'/test_%03d.bvh' % i_batch), \
                         foot, \
                         fid_l=(3, 4), \
                         fid_r=(7, 8), \
                         output_path=(
-                                    "/content/drive/MyDrive/Pytorch-Robust-Motion-In-betweening/bvh_seq_after" + version + "/test_%03d.bvh" % i_batch))
+                                    path_to_save+'/test_%03d.bvh' % i_batch))
 
-    def save_results(self,contact_list=None, pred_list=None, bvh_list=None):
-            if self.test_configrations['test']['save_gif']:
-                self.save_gif(pred_list)
-            if self.test_configrations['test']['save_bvh']:
-                self.save_bvh(contact_list,bvh_list)
+    def save_results(self,contact_list=None, pred_list=None, bvh_list=None,i_batch=1):
+        os.mkdir(self.results_path+'/bvh')
+        os.mkdir(self.results_path+'/gif')
+        if self.test_configrations['test']['save_gif']:
+            self.save_gif(pred_list,self.results_path+'/gif')
+        if self.test_configrations['test']['save_bvh']:
+            self.save_bvh(contact_list,bvh_list,i_batch,self.results_path+'/bvh')
 
