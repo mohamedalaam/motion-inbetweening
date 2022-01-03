@@ -19,7 +19,7 @@ class InferModel:
 
     def infer(self, file_path):
         dataset = LaFan1(file_path)
-        model = Model(load_pre_trained=True, results_path='../results',calc_loss=False)
+        model = Model(load_pre_trained=True, results_path=os.path.join(ROOT_PATH,'api\\results'),calc_loss=False)
         model.predict(dataset)
 
 

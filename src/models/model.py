@@ -21,8 +21,8 @@ ROOT_PATH=get_project_path()
 class Model:
     def __init__(self, load_pre_trained=True,results_path=None,calc_loss=True):
         self.calc_loss = calc_loss
-        self.test_configrations = yaml.load(open('../../config/test-base.yaml', 'r').read())
-        self.train_configrations = yaml.load(open('../../config/train-base.yaml', 'r').read())
+        self.test_configrations = yaml.load(open(os.path.join(ROOT_PATH,'config\\test-base.yaml'), 'r').read())
+        self.train_configrations = yaml.load(open(os.path.join(ROOT_PATH,'config\\train-base.yaml'), 'r').read())
         self.results_path=results_path
         self.load_components()
         if load_pre_trained:
@@ -272,7 +272,7 @@ class Model:
             self.plot_pose(frame,path_to_save)
             pred_img = Image.open( path_to_save+'image.png', 'r')
             img_list.append(np.array(pred_img))
-        imageio.mimsave(path_to_save+'/img_%03d.gif', img_list, duration=0.1)
+        imageio.mimsave(path_to_save+'/animation.gif', img_list, duration=0.1)
 
     def save_bvh(self,contact_list, bvh_list,i_batch,path_to_save):
         bs=0

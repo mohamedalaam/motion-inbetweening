@@ -1,3 +1,4 @@
+import os.path
 import shutil
 from fastapi import FastAPI, Request
 from fastapi import File, UploadFile, Form
@@ -6,12 +7,12 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 from fastapi.responses import RedirectResponse
-
+from src.utils import get_project_path
 from api.model.inference import InferModel
-
+ROOT_PATH=get_project_path()
 app = FastAPI()
 app.mount("/static/", StaticFiles(directory="static"), name="static")
-
+app.mount("/results/", StaticFiles(directory="results"), name="results")
 inference_model=InferModel()
 templates = Jinja2Templates(directory="templates")
 
@@ -26,6 +27,7 @@ async def index(request: Request):
 @app.post("/generate/")
 async def create_upload_file(request: Request, file: UploadFile = File(...)):
     file_path = "uploaded_files/" + file.filename
+
     try:
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -35,11 +37,12 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
         return RedirectResponse("http://127.0.0.1:8000/", status_code=303)
 
     # Use gif function
+    print(file_path)
     inference_model.infer(file_path=file_path)
     # Use bvh function
 
-    gif_src = "test.gif"
-    filename = file.filename
+    gif_src = "animation.gif"
+    filename = 'test_000.bvh'
 
 
     return templates.TemplateResponse("index.html", {"request": request, "gif_src": gif_src, "filename": filename})
@@ -47,7 +50,7 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
 
 @app.get("/download/{filename}")
 async def create_upload_file(request: Request, filename):
-    file_location = "uploaded_files/"+filename
+    file_location = os.path.join(ROOT_PATH,"api\\results\\bvh",filename)
     print("Hi")
     print(file_location)
     return FileResponse(file_location, media_type='application/octet-stream')

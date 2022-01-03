@@ -27,7 +27,7 @@
             </div>
         </form>
         <div class="gif-img">
-            <img src="{{url_for('static', path=gif_src)}}"/>
+            <img src="{{url_for('results', path='gif/'+gif_src)}}"/>
         </div>
 
         <form action="{{'http://127.0.0.1:8000/download/'+filename}}" method="get" class="download-bvh">
