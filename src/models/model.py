@@ -9,7 +9,8 @@ from src.models.functions import gen_ztta, write_to_bvhfile
 
 
 class Model:
-    def __init__(self, load_pre_trained=True,results_path=None):
+    def __init__(self, load_pre_trained=True,results_path=None,calc_loss=True):
+        self.calc_loss = calc_loss
         self.test_configrations = yaml.load(open('../../config/test-base.yaml', 'r').read())
         self.train_configrations = yaml.load(open('../../config/train-base.yaml', 'r').read())
         self.results_path=results_path
@@ -150,23 +151,26 @@ class Model:
             # print('root_pred:', root_pred.size())
             pos_pred = self.skeleton_mocap.forward_kinematics(local_q_pred_, root_pred)
             bvh_list.append(torch.cat([root_pred[0], local_q_pred_[0].view(local_q_pred_.size(1), -1)], -1))
-            pos_next = X[:, t + 1]
-            local_q_next = local_q[:, t + 1]
-            local_q_next = local_q_next.view(local_q_next.size(0), -1)
-            root_p_next = root_p[:, t + 1]
-            contact_next = contact[:, t + 1]
-            # print(pos_pred.size(), x_std.size())
-            loss_pos += torch.mean(torch.abs(
-                pos_pred[0] - pos_next) / self.x_std) / seq_length  # opt['model']['seq_length']
-            loss_quat += torch.mean(torch.abs(
-                local_q_pred[0] - local_q_next)) / seq_length  # opt['model']['seq_length']
-            loss_root += torch.mean(torch.abs(root_pred[0] - root_p_next) / self.x_std[:, :,
-                                                                            0]) / seq_length  # opt['model']['seq_length']
-            loss_contact += torch.mean(torch.abs(
-                contact_pred[0] - contact_next)) / seq_length  # opt['model']['seq_length']
+            if self.calc_loss:
+                pos_next = X[:, t + 1]
+                local_q_next = local_q[:, t + 1]
+                local_q_next = local_q_next.view(local_q_next.size(0), -1)
+                root_p_next = root_p[:, t + 1]
+                contact_next = contact[:, t + 1]
+                # print(pos_pred.size(), x_std.size())
+                loss_pos += torch.mean(torch.abs(
+                    pos_pred[0] - pos_next) / self.x_std) / seq_length  # opt['model']['seq_length']
+                loss_quat += torch.mean(torch.abs(
+                    local_q_pred[0] - local_q_next)) / seq_length  # opt['model']['seq_length']
+                loss_root += torch.mean(torch.abs(root_pred[0] - root_p_next) / self.x_std[:, :,
+                                                                                0]) / seq_length  # opt['model']['seq_length']
+                loss_contact += torch.mean(torch.abs(
+                    contact_pred[0] - contact_next)) / seq_length  # opt['model']['seq_length']
             pred_list.append(pos_pred[0])
             contact_list.append(contact_pred[0])
+
         return (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root)
+
 
     def _get_lambda(self, t):
         tta = self.test_configrations['model']['seq_length'] - 2 - t

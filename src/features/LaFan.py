@@ -24,7 +24,8 @@ class LaFan1(Dataset):
         self.train = train
         self.seq_len = seq_len
         self.offset = offset
-        self.data = self.load_data(bvh_path,reprocess)
+        self.reprocess=reprocess
+        self.data = self.load_data(bvh_path)
         self.cur_seq_length = 5
 
         
@@ -37,14 +38,36 @@ class LaFan1(Dataset):
             contacts_r = hf['contacts_r'][:]
         return X,Q,contacts_l,contacts_r,parents
 
-    def load_data(self, bvh_path,reprocess):
+
+
+
+    def load_single_file(self,file_path):
+        anim = extract.read_bvh(file_path)
+        q, x = utils.quat_fk(anim.quats[:], anim.pos[:], anim.parents)
+        # Extract contacts
+        c_l, c_r = utils.extract_feet_contacts(x, [3, 4], [7, 8], velfactor=0.02)
+        return anim.pos, anim.quats, anim.parents, c_l, c_r
+
+
+    def load_train_data(self, bvh_path):
+        if self.reprocess:
+            X, Q, parents, contacts_l, contacts_r = extract.get_lafan1_set( \
+                bvh_path, self.actors, window=self.seq_len, offset=self.offset)
+        else:
+            X, Q, contacts_l, contacts_r, parents = self.load_h5f(bvh_path)
+
+        return  X, Q, contacts_l, contacts_r, parents
+
+    def load_data(self, bvh_path):
         # Get test-set for windows of 65 frames, offset by 40 frames
         print('Building the data set...')
-        if reprocess:
-            X, Q, parents, contacts_l, contacts_r = extract.get_lafan1_set(\
-                                              bvh_path, self.actors, window=self.seq_len, offset=self.offset)
+        #for inference
+        if bvh_path.endswith('.bvh'):
+            X, Q, parents, contacts_l, contacts_r = self.load_single_file(bvh_path)
         else:
-            X,Q,contacts_l,contacts_r,parents = self.load_h5f(bvh_path)
+            X, Q, contacts_l, contacts_r, parents= self.load_train_data(bvh_path)
+
+
         # Global representation:
         q_glbl, x_glbl = utils.quat_fk(Q, X, parents)
 
