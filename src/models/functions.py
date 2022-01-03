@@ -1,9 +1,13 @@
+import os.path
+
 import torch
 import numpy as np
 import torch.nn as nn
 from src.quaternion import qeuler_np
 #from src.remove_fs import remove_fs
+from src.utils import get_project_path
 
+ROOT_PATH=get_project_path()
 def PLU(x, alpha = 0.1, c = 1.0):
     relu = nn.ReLU()
     o1 = alpha * (x + c) - c
@@ -39,7 +43,7 @@ def gen_ztar(sigma = 1.0, length = 50):
 def write_to_bvhfile(data, filename, joints_to_remove):
     fout = open(filename, 'w')
     line_cnt = 0
-    for line in open('./example.bvh', 'r'):
+    for line in open(os.path.join(ROOT_PATH,'src\\foot_sliding\\example.bvh'), 'r'):
         fout.write(line)
         line_cnt += 1
         if line_cnt >= 132:

@@ -1,5 +1,8 @@
 import torch
 import sys, os
+
+from src.utils import get_project_path
+
 sys.path.insert(0, os.path.dirname(__file__))
 from src.features.LaFan import LaFan1
 from torch.utils.data import Dataset, DataLoader
@@ -25,6 +28,7 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 from src.features.remove_fs import remove_fs, save_bvh_from_network_output
 from src.foot_sliding.animation_data import y_rotation_from_positions
 from PIL import Image
+ROOT_PATH = get_project_path()
 
 
 class Test:
@@ -68,11 +72,11 @@ def plot_pose(pose, cur_frame, prefix):
     ax.set_zlim(zmid - scale // 2, zmid + scale // 2)
 
     plt.draw()
-    plt.savefig(prefix + '_' + str(cur_frame)+'.png', dpi=200, bbox_inches='tight')
+    plt.savefig(prefix + 'image' +'.png', dpi=200, bbox_inches='tight')
     plt.close()
 
 if __name__ == '__main__':
-    opt = yaml.load(open('./config/test-base.yaml', 'r').read())
+    opt = yaml.load(open('C:\\Users\\moham\\PycharmProjects\\motion-inbetweening\\config\\test-base.yaml', 'r').read())
     model_dir =opt['test']['model_dir']
     
     ## initilize the skeleton ##
@@ -81,10 +85,10 @@ if __name__ == '__main__':
     skeleton_mocap.remove_joints(opt['data']['joints_to_remove'])
 
     ## load train data ##
-    lafan_data_test = LaFan1(opt['data']['data_dir'], \
+    lafan_data_test = LaFan1(os.path.join(ROOT_PATH,opt['data']['data_dir']), \
                               seq_len = opt['model']['seq_length'], \
                               offset = 40,\
-                              train = False, debug=opt['test']['debug'])
+                              train = False)
     lafan_data_test.cur_seq_length = opt['model']['seq_length']
     x_mean = lafan_data_test.x_mean.cuda()
     x_std = lafan_data_test.x_std.cuda().view(1, 1, opt['model']['num_joints'], 3)
@@ -95,19 +99,19 @@ if __name__ == '__main__':
     ## initialize model and load parameters ##
     state_encoder = StateEncoder(in_dim=opt['model']['state_input_dim'])
     state_encoder = state_encoder.cuda()
-    state_encoder.load_state_dict(torch.load(os.path.join(opt['test']['model_dir'], 'state_encoder.pkl')))
+    state_encoder.load_state_dict(torch.load(os.path.join(ROOT_PATH,opt['test']['model_dir'], 'state_encoder.pkl')))
     offset_encoder = OffsetEncoder(in_dim=opt['model']['offset_input_dim'])
     offset_encoder = offset_encoder.cuda()
-    offset_encoder.load_state_dict(torch.load(os.path.join(opt['test']['model_dir'], 'offset_encoder.pkl')))
+    offset_encoder.load_state_dict(torch.load(os.path.join(ROOT_PATH,opt['test']['model_dir'], 'offset_encoder.pkl')))
     target_encoder = TargetEncoder(in_dim=opt['model']['target_input_dim'])
     target_encoder = target_encoder.cuda()
-    target_encoder.load_state_dict(torch.load(os.path.join(opt['test']['model_dir'], 'target_encoder.pkl')))
+    target_encoder.load_state_dict(torch.load(os.path.join(ROOT_PATH,opt['test']['model_dir'], 'target_encoder.pkl')))
     lstm = LSTM(in_dim=opt['model']['lstm_dim'], hidden_dim = opt['model']['lstm_dim'] * 2)
     lstm = lstm.cuda()
-    lstm.load_state_dict(torch.load(os.path.join(opt['test']['model_dir'], 'lstm.pkl')))
+    lstm.load_state_dict(torch.load(os.path.join(ROOT_PATH,opt['test']['model_dir'], 'lstm.pkl')))
     decoder = Decoder(in_dim=opt['model']['lstm_dim'] * 2, out_dim=opt['model']['state_input_dim'])
     decoder = decoder.cuda()
-    decoder.load_state_dict(torch.load(os.path.join(opt['test']['model_dir'], 'decoder.pkl')))
+    decoder.load_state_dict(torch.load(os.path.join(ROOT_PATH,opt['test']['model_dir'], 'decoder.pkl')))
     print('model loaded')
 
     ## get positional code ##
@@ -143,7 +147,7 @@ if __name__ == '__main__':
             loss_root = 0
             with torch.no_grad():
                 # if True:
-                # state input
+                # state input*
                 local_q = sampled_batch['local_q'].cuda()
                 root_v = sampled_batch['root_v'].cuda()
                 contact = sampled_batch['contact'].cuda()
@@ -334,6 +338,7 @@ if __name__ == '__main__':
                     if os.path.exists(r+version+'/gif') == False:
                       os.mkdir(r+version+'/gif')
                     imageio.mimsave((r+version+'/gif'+'/img_%03d.gif' % i_batch), img_list, duration=0.1)
+
                 if opt['test']['save_pose']:
                     gt_pose = X[bs,:].view(opt['model']['seq_length'], 22, 3).detach().cpu().numpy()
                     pred_pose = torch.cat([x[bs].unsqueeze(0) for x in pred_list], 0).detach().cpu().numpy()

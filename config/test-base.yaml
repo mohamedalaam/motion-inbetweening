@@ -56,9 +56,9 @@ test:
     save_img: True
     save_gif: True
     save_pose: False
-    save_bvh: False
+    save_bvh: True
     debug: False
     version: '3'
-    model_dir: '/content/drive/MyDrive/Pytorch-Robust-Motion-In-betweening/model'
+    model_dir: 'models'
     bvh_results_path: ''
 

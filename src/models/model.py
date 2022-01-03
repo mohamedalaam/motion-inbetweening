@@ -1,12 +1,22 @@
 import os
+
+import imageio
+import numpy as np
 import torch
 import yaml
+from PIL import Image
+from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
+import torch.optim as optim
 
+from src.features.LaFan import LaFan1
 from src.features.remove_fs import remove_fs
-from src.models.components import StateEncoder, OffsetEncoder, TargetEncoder, LSTM, Decoder
+from src.models.components import StateEncoder, OffsetEncoder, TargetEncoder, LSTM, Decoder, ShortMotionDiscriminator, \
+    LongMotionDiscriminator
 from src.models.functions import gen_ztta, write_to_bvhfile
-
+from src.skeleton import Skeleton
+from src.utils import get_project_path
+ROOT_PATH=get_project_path()
 
 class Model:
     def __init__(self, load_pre_trained=True,results_path=None,calc_loss=True):
@@ -39,45 +49,86 @@ class Model:
         self.decoder.eval()
 
     def load_components(self):
-        state_encoder = StateEncoder(in_dim=self.test_configrations['model']['state_input_dim'])
+        state_encoder = StateEncoder(in_dim=self.train_configrations['model']['state_input_dim'])
         self.state_encoder = state_encoder.cuda()
-        offset_encoder = OffsetEncoder(in_dim=self.test_configrations['model']['offset_input_dim'])
+        offset_encoder = OffsetEncoder(in_dim=self.train_configrations['model']['offset_input_dim'])
         self.offset_encoder = offset_encoder.cuda()
-        target_encoder = TargetEncoder(in_dim=self.test_configrations['model']['target_input_dim'])
+        target_encoder = TargetEncoder(in_dim=self.train_configrations['model']['target_input_dim'])
         self.target_encoder = target_encoder.cuda()
-        lstm = LSTM(in_dim=self.test_configrations['model']['lstm_dim'],
-                    hidden_dim=self.test_configrations['model']['lstm_dim'] * 2)
+        lstm = LSTM(in_dim=self.train_configrations['model']['lstm_dim'],
+                    hidden_dim=self.train_configrations['model']['lstm_dim'] * 2)
         self.lstm = lstm.cuda()
-        decoder = Decoder(in_dim=self.test_configrations['model']['lstm_dim'] * 2,
-                          out_dim=self.test_configrations['model']['state_input_dim'])
+        decoder = Decoder(in_dim=self.train_configrations['model']['lstm_dim'] * 2,
+                          out_dim=self.train_configrations['model']['state_input_dim'])
         self.decoder = decoder.cuda()
         self.ztta = gen_ztta().cuda()
+        short_discriminator = ShortMotionDiscriminator(in_dim=(self.train_configrations['model']['num_joints'] * 3 * 2))
+        self.short_discriminator = short_discriminator.cuda()
+        long_discriminator = LongMotionDiscriminator(in_dim=(self.train_configrations['model']['num_joints'] * 3 * 2))
+        self.long_discriminator = long_discriminator.cuda()
+        self.optimizer_g = optim.Adam(lr=self.train_configrations['train']['lr'], params=list(state_encoder.parameters()) + \
+                                                               list(offset_encoder.parameters()) + \
+                                                               list(target_encoder.parameters()) + \
+                                                               list(lstm.parameters()) + \
+                                                               list(decoder.parameters()), \
+                                 betas=(self.train_configrations['train']['beta1'], self.train_configrations['train']['beta2']), \
+                                 weight_decay=self.train_configrations['train']['weight_decay'])
+
+        self.optimizer_d = optim.Adam(lr=self.train_configrations['train']['lr'] * 0.1, params=list(short_discriminator.parameters()) + \
+                                                                         list(long_discriminator.parameters()), \
+                                     betas=(self.train_configrations['train']['beta1'], self.train_configrations['train']['beta2']), \
+                                     weight_decay=self.train_configrations['train']['weight_decay'])
 
     def load_pre_trained(self):
         self.state_encoder.load_state_dict(
-            torch.load(os.path.join(self.test_configrations['test']['model_dir'], 'state_encoder.pkl')))
+            torch.load(os.path.join(ROOT_PATH, self.test_configrations['test']['model_dir'], 'state_encoder.pkl')))
         self.offset_encoder.load_state_dict(
-            torch.load(os.path.join(self.test_configrations['test']['model_dir'], 'offset_encoder.pkl')))
+            torch.load(os.path.join(ROOT_PATH,self.test_configrations['test']['model_dir'], 'offset_encoder.pkl')))
         self.target_encoder.load_state_dict(
-            torch.load(os.path.join(self.test_configrations['test']['model_dir'], 'target_encoder.pkl')))
+            torch.load(os.path.join(ROOT_PATH,self.test_configrations['test']['model_dir'], 'target_encoder.pkl')))
+        self.lstm.load_state_dict(
+            torch.load(os.path.join(ROOT_PATH, self.test_configrations['test']['model_dir'], 'lstm.pkl')))
         self.decoder.load_state_dict(
-            torch.load(os.path.join(self.test_configrations['test']['model_dir'], 'decoder.pkl')))
+            torch.load(os.path.join(ROOT_PATH,self.test_configrations['test']['model_dir'], 'decoder.pkl')))
+
 
     def train(self,lafan_dataset):
         self.set_train_mode()
+        lafan_data_train = LaFan1(self.train_configrations['data']['proc_dir'], \
+                                  seq_len=self.train_configrations['model']['seq_length'], \
+                                  offset=self.train_configrations['data']['offset'], \
+                                  train=True, reprocess=False)
         lafan_loader_train=self.create_dataloader(lafan_dataset)
 
+        model_dir = 'models'
+        if not os.path.exists(os.path.join("../../", model_dir)):
+            os.mkdir(os.path.join("../../", model_dir))
+        model_dir="../../"+ model_dir
+        self.skeleton_mocap.cuda()
+        self.skeleton_mocap.remove_joints(self.train_configrations['data']['joints_to_remove'])
+        for epoch in range(self.train_configrations['train']['num_epoch']):
 
-
-
+            if self.train_configrations['train']['progressive_training']:
+                ## get positional code ##
+                if self.train_configrations['train']['use_ztta']:
+                    ztta = gen_ztta(length=lafan_data_train.cur_seq_length).cuda()
+                    if (10 + (epoch // 2)) < self.train_configrations['model']['seq_length']:
+                        lafan_data_train.cur_seq_length = 10 + (epoch // 2)
+                    else:
+                        lafan_data_train.cur_seq_length = self.train_configrations['model']['seq_length']
+            else:
+                ## get positional code ##
+                if self.train_configrations['train']['use_ztta']:
+                    lafan_data_train.cur_seq_length = self.train_configrations['model']['seq_length']
+                    ztta = gen_ztta(length=self.train_configrations['model']['seq_length']).cuda()
 
     def create_dataloader(self,dataset):
-        x_mean = dataset.x_mean.cuda()
-        x_std = dataset.x_std.cuda().view(1, 1, self.train_configrations['model']['num_joints'], 3)
+        #x_mean = dataset[1].x_mean.cuda()
+        #x_std = dataset.x_std.cuda().view(1, 1, self.train_configrations['model']['num_joints'], 3)
         lafan_loader_train = DataLoader(dataset, \
                                         batch_size=self.train_configrations['train']['batch_size'], \
                                         shuffle=True, num_workers=self.train_configrations['data']['num_workers'])
-        self.x_std=x_std
+        #self.x_std=x_std
         return lafan_loader_train
 
 
@@ -86,6 +137,7 @@ class Model:
         self.set_eval_mode()
         for i_batch, sampled_batch in enumerate(lafan_dataloader):
             with torch.no_grad():
+
                 (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root) =self.generate_seq(sampled_batch)
                 self.save_results(contact_list=contact_list,pred_list=pred_list,bvh_list=bvh_list,i_batch=i_batch)
 
@@ -98,9 +150,14 @@ class Model:
         loss_pos, loss_quat, loss_contact, loss_root = 0, 0, 0, 0
         pred_list, contact_list = [], []
         local_q, root_v, contact, root_p_offset, local_q_offset, target, root_p, X = self.get_data_from_dict(batch_dict)
+        self.lstm.init_hidden(local_q.size(0))
         bvh_list = []
         bvh_list.append(torch.cat([X[:, 0, 0], local_q[:, 0, ].view(local_q.size(0), -1)], -1))
-        for t in range(seq_length):
+        contact_list.append(contact[:, 0])
+
+
+
+        for t in range(seq_length-1):
             # root pos
             if t == 0:
                 root_p_t = root_p[:, t]
@@ -115,6 +172,7 @@ class Model:
                 root_v_t = root_v_pred[0]
 
             # state input
+
             state_input = torch.cat([local_q_t, root_v_t, contact_t], -1)
             root_p_offset_t = root_p_offset - root_p_t
             local_q_offset_t = local_q_offset - local_q_t
@@ -166,7 +224,9 @@ class Model:
                                                                                 0]) / seq_length  # opt['model']['seq_length']
                 loss_contact += torch.mean(torch.abs(
                     contact_pred[0] - contact_next)) / seq_length  # opt['model']['seq_length']
-            pred_list.append(pos_pred[0])
+            pred_list.append(np.concatenate([X[0, 0].view(22, 3).detach().cpu().numpy(), \
+                                      pos_pred[0].view(22, 3).detach().cpu().numpy(), \
+                                      X[0, -1].view(22, 3).detach().cpu().numpy()], 0))
             contact_list.append(contact_pred[0])
 
         return (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root)
@@ -207,10 +267,15 @@ class Model:
     we could use it to build our gif
     '''
     def save_gif(self, pred_list,path_to_save):
-        pass
+        img_list=[]
+        for frame in pred_list:
+            self.plot_pose(frame,path_to_save)
+            pred_img = Image.open( path_to_save+'image.png', 'r')
+            img_list.append(np.array(pred_img))
+        imageio.mimsave(path_to_save+'/img_%03d.gif', img_list, duration=0.1)
 
     def save_bvh(self,contact_list, bvh_list,i_batch,path_to_save):
-        bs=6
+        bs=0
         bvh_data = torch.cat([x[bs].unsqueeze(0) for x in bvh_list], 0).detach().cpu().numpy()
         write_to_bvhfile(bvh_data,
                          (path_to_save+'/test_%03d.bvh' % i_batch),
@@ -228,9 +293,50 @@ class Model:
                         output_path=(
                                     path_to_save+'/test_%03d.bvh' % i_batch))
 
+    def plot_pose(self,pose, prefix):
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        parents = [-1, 0, 1, 2, 3, 0, 5, 6, 7, 0, 9, 10, 11, 12, 11, 14, 15, 16, 11, 18, 19, 20]
+        ax.cla()
+        num_joint = pose.shape[0] // 3
+        for i, p in enumerate(parents):
+            if i > 0:
+                ax.plot([pose[i, 0], pose[p, 0]], \
+                        [pose[i, 2], pose[p, 2]], \
+                        [pose[i, 1], pose[p, 1]], c='r')
+                ax.plot([pose[i + num_joint, 0], pose[p + num_joint, 0]], \
+                        [pose[i + num_joint, 2], pose[p + num_joint, 2]], \
+                        [pose[i + num_joint, 1], pose[p + num_joint, 1]], c='b')
+                ax.plot([pose[i + num_joint * 2, 0], pose[p + num_joint * 2, 0]], \
+                        [pose[i + num_joint * 2, 2], pose[p + num_joint * 2, 2]], \
+                        [pose[i + num_joint * 2, 1], pose[p + num_joint * 2, 1]], c='g')
+        # ax.scatter(pose[:num_joint, 0], pose[:num_joint, 2], pose[:num_joint, 1],c='b')
+        # ax.scatter(pose[num_joint:num_joint*2, 0], pose[num_joint:num_joint*2, 2], pose[num_joint:num_joint*2, 1],c='b')
+        # ax.scatter(pose[num_joint*2:num_joint*3, 0], pose[num_joint*2:num_joint*3, 2], pose[num_joint*2:num_joint*3, 1],c='g')
+        xmin = np.min(pose[:, 0])
+        ymin = np.min(pose[:, 2])
+        zmin = np.min(pose[:, 1])
+        xmax = np.max(pose[:, 0])
+        ymax = np.max(pose[:, 2])
+        zmax = np.max(pose[:, 1])
+        scale = np.max([xmax - xmin, ymax - ymin, zmax - zmin])
+        xmid = (xmax + xmin) // 2
+        ymid = (ymax + ymin) // 2
+        zmid = (zmax + zmin) // 2
+        ax.set_xlim(xmid - scale // 2, xmid + scale // 2)
+        ax.set_ylim(ymid - scale // 2, ymid + scale // 2)
+        ax.set_zlim(zmid - scale // 2, zmid + scale // 2)
+
+        plt.draw()
+        plt.savefig(prefix + 'image' + '.png', dpi=200, bbox_inches='tight')
+        plt.close()
+
     def save_results(self,contact_list=None, pred_list=None, bvh_list=None,i_batch=1):
-        os.mkdir(self.results_path+'/bvh')
-        os.mkdir(self.results_path+'/gif')
+        if not os.path.exists(self.results_path+'/bvh'):
+            os.mkdir(self.results_path+'/bvh')
+            os.mkdir(self.results_path+'/gif')
         if self.test_configrations['test']['save_gif']:
             self.save_gif(pred_list,self.results_path+'/gif')
         if self.test_configrations['test']['save_bvh']:

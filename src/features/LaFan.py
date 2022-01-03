@@ -46,6 +46,10 @@ class LaFan1(Dataset):
         q, x = utils.quat_fk(anim.quats[:], anim.pos[:], anim.parents)
         # Extract contacts
         c_l, c_r = utils.extract_feet_contacts(x, [3, 4], [7, 8], velfactor=0.02)
+        anim.pos=anim.pos[np.newaxis,:,:,:]
+        anim.quats=anim.quats[np.newaxis,:,:,:]
+        c_l=c_l[np.newaxis,:,:]
+        c_r=c_r[np.newaxis,:,:]
         return anim.pos, anim.quats, anim.parents, c_l, c_r
 
 

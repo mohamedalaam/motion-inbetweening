@@ -35,7 +35,7 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
         return RedirectResponse("http://127.0.0.1:8000/", status_code=303)
 
     # Use gif function
-    inference_model.infer(file_path='uploaded_files')
+    inference_model.infer(file_path=file_path)
     # Use bvh function
 
     gif_src = "test.gif"
