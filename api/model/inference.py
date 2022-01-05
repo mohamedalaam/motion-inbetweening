@@ -23,5 +23,5 @@ class InferModel:
         model.predict(dataset)
 
 
-# model = InferModel()
-# model.infer('../uploaded_files/test_subject5.bvh')
+model = InferModel()
+model.infer('../uploaded_files/test_subject5.bvh')

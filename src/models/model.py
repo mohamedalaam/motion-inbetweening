@@ -8,6 +8,7 @@ from PIL import Image
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 import torch.optim as optim
+from tqdm import tqdm
 
 from src.features.LaFan import LaFan1
 from src.features.remove_fs import remove_fs
@@ -35,6 +36,7 @@ class Model:
         self.skeleton_mocap.remove_joints(self.test_configrations['data']['joints_to_remove'])
 
     def set_train_mode(self):
+        self.train_mode = True
         self.state_encoder.train()
         self.offset_encoder.train()
         self.target_encoder.train()
@@ -42,6 +44,7 @@ class Model:
         self.decoder.train()
 
     def set_eval_mode(self):
+        self.train_mode = False
         self.state_encoder.eval()
         self.offset_encoder.eval()
         self.target_encoder.eval()
@@ -94,47 +97,129 @@ class Model:
 
     def train(self,lafan_dataset):
         self.set_train_mode()
-        lafan_data_train = LaFan1(self.train_configrations['data']['proc_dir'], \
-                                  seq_len=self.train_configrations['model']['seq_length'], \
-                                  offset=self.train_configrations['data']['offset'], \
-                                  train=True, reprocess=False)
         lafan_loader_train=self.create_dataloader(lafan_dataset)
+        model_dir = os.path.join(ROOT_PATH, 'models')
+        if not os.path.exists(model_dir):
+            os.mkdir(model_dir)
 
-        model_dir = 'models'
-        if not os.path.exists(os.path.join("../../", model_dir)):
-            os.mkdir(os.path.join("../../", model_dir))
-        model_dir="../../"+ model_dir
-        self.skeleton_mocap.cuda()
-        self.skeleton_mocap.remove_joints(self.train_configrations['data']['joints_to_remove'])
+
+        loss_total_min = 10000000.0
         for epoch in range(self.train_configrations['train']['num_epoch']):
+            loss_total_list = []
 
             if self.train_configrations['train']['progressive_training']:
                 ## get positional code ##
                 if self.train_configrations['train']['use_ztta']:
-                    ztta = gen_ztta(length=lafan_data_train.cur_seq_length).cuda()
+                    self.ztta = gen_ztta(length=lafan_dataset.cur_seq_length).cuda()
                     if (10 + (epoch // 2)) < self.train_configrations['model']['seq_length']:
-                        lafan_data_train.cur_seq_length = 10 + (epoch // 2)
+                        lafan_dataset.cur_seq_length = 10 + (epoch // 2)
                     else:
-                        lafan_data_train.cur_seq_length = self.train_configrations['model']['seq_length']
+                        lafan_dataset.cur_seq_length = self.train_configrations['model']['seq_length']
             else:
                 ## get positional code ##
                 if self.train_configrations['train']['use_ztta']:
-                    lafan_data_train.cur_seq_length = self.train_configrations['model']['seq_length']
-                    ztta = gen_ztta(length=self.train_configrations['model']['seq_length']).cuda()
+                    lafan_dataset.cur_seq_length = self.train_configrations['model']['seq_length']
+                    self.ztta = gen_ztta(length=self.train_configrations['model']['seq_length']).cuda()
+            for i_batch, sampled_batch in tqdm(enumerate(lafan_loader_train)):
+                (pred_list, bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root) = self.generate_seq(sampled_batch)
+                X=sampled_batch['X'].cuda()
+                contact = sampled_batch['contact'].cuda()
+
+
+
+
+
+                fake_input = torch.cat([x.reshape(x.size(0), -1).unsqueeze(-1) for x in pred_list], -1)
+                fake_v_input = torch.cat(
+                    [fake_input[:, :, 1:] - fake_input[:, :, :-1], torch.zeros_like(fake_input[:, :, 0:1]).cuda()],
+                    -1)
+                fake_input = torch.cat([fake_input, fake_v_input], 1)
+
+                real_input = torch.cat(
+                    [X[:, i].view(X.size(0), -1).unsqueeze(-1) for i in range(lafan_dataset.cur_seq_length)], -1)
+                real_v_input = torch.cat(
+                    [real_input[:, :, 1:] - real_input[:, :, :-1], torch.zeros_like(real_input[:, :, 0:1]).cuda()],
+                    -1)
+                real_input = torch.cat([real_input, real_v_input], 1)
+
+                self.optimizer_d.zero_grad()
+                short_fake_logits = torch.mean(self.short_discriminator(fake_input.detach())[:, 0], 1)
+                short_real_logits = torch.mean(self.short_discriminator(real_input)[:, 0], 1)
+                short_d_fake_loss = torch.mean((short_fake_logits) ** 2)
+                short_d_real_loss = torch.mean((short_real_logits - 1) ** 2)
+                short_d_loss = (short_d_fake_loss + short_d_real_loss) / 2.0
+
+                long_fake_logits = torch.mean(self.long_discriminator(fake_input.detach())[:, 0], 1)
+                long_real_logits = torch.mean(self.long_discriminator(real_input)[:, 0], 1)
+                long_d_fake_loss = torch.mean((long_fake_logits) ** 2)
+                long_d_real_loss = torch.mean((long_real_logits - 1) ** 2)
+                long_d_loss = (long_d_fake_loss + long_d_real_loss) / 2.0
+                total_d_loss = self.train_configrations['train']['loss_adv_weight'] * long_d_loss + \
+                               self.train_configrations['train']['loss_adv_weight'] * short_d_loss
+                total_d_loss.backward()
+                self.optimizer_d.step()
+
+                self.optimizer_g.zero_grad()
+                pred_pos = torch.cat([x.reshape(x.size(0), -1).unsqueeze(-1) for x in pred_list], -1)
+                pred_vel = (pred_pos[:, self.train_configrations['data']['foot_index'], 1:] - pred_pos[:, self.train_configrations['data']['foot_index'], :-1])
+                pred_vel = pred_vel.view(pred_vel.size(0), 4, 3, pred_vel.size(-1))
+                loss_slide = torch.mean(torch.abs(pred_vel * contact[:, :-1].permute(0, 2, 1).unsqueeze(2)))
+                loss_total = self.train_configrations['train']['loss_pos_weight'] * loss_pos + \
+                             self.train_configrations['train']['loss_quat_weight'] * loss_quat + \
+                             self.train_configrations['train']['loss_root_weight'] * loss_root + \
+                             self.train_configrations['train']['loss_slide_weight'] * loss_slide + \
+                             self.train_configrations['train']['loss_contact_weight'] * loss_contact
+
+
+                short_fake_logits = torch.mean(self.short_discriminator(fake_input)[:, 0], 1)
+                short_g_loss = torch.mean((short_fake_logits - 1) ** 2)
+                long_fake_logits = torch.mean(self.long_discriminator(fake_input)[:, 0], 1)
+                long_g_loss = torch.mean((long_fake_logits - 1) ** 2)
+                total_g_loss = self.train_configrations['train']['loss_adv_weight'] * long_g_loss + \
+                               self.train_configrations['train']['loss_adv_weight'] * short_g_loss
+                loss_total += total_g_loss
+
+                loss_total.backward()
+                torch.nn.utils.clip_grad_norm_(self.state_encoder.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(self.offset_encoder.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(self.target_encoder.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(self.lstm.parameters(), 0.5)
+                torch.nn.utils.clip_grad_norm_(self.decoder.parameters(), 0.5)
+                self.optimizer_g.step()
+                loss_total_list.append(loss_total.item())
+
+            loss_total_cur = np.mean(loss_total_list)
+            if loss_total_cur < loss_total_min:
+                loss_total_min = loss_total_cur
+                torch.save(self.state_encoder.state_dict(), model_dir + '/state_encoder.pkl')
+                torch.save(self.target_encoder.state_dict(), model_dir + '/target_encoder.pkl')
+                torch.save(self.offset_encoder.state_dict(), model_dir + '/offset_encoder.pkl')
+                torch.save(self.lstm.state_dict(), model_dir + '/lstm.pkl')
+                torch.save(self.decoder.state_dict(), model_dir + '/decoder.pkl')
+                torch.save(self.optimizer_g.state_dict(), model_dir + '/optimizer_g.pkl')
+                torch.save(self.short_discriminator.state_dict(), model_dir + '/short_discriminator.pkl')
+                torch.save(self.long_discriminator.state_dict(), model_dir + '/long_discriminator.pkl')
+                torch.save(self.optimizer_d.state_dict(), model_dir + '/optimizer_d.pkl')
+            print(
+                "train epoch: %03d, cur total loss:%.3f, cur best loss:%.3f" % (epoch, loss_total_cur, loss_total_min))
+
+
+
 
     def create_dataloader(self,dataset):
-        #x_mean = dataset[1].x_mean.cuda()
-        #x_std = dataset.x_std.cuda().view(1, 1, self.train_configrations['model']['num_joints'], 3)
+        x_mean = dataset.x_mean.cuda()
+        self.x_std = dataset.x_std.cuda().view(1, 1, self.train_configrations['model']['num_joints'], 3)
         lafan_loader_train = DataLoader(dataset, \
                                         batch_size=self.train_configrations['train']['batch_size'], \
                                         shuffle=True, num_workers=self.train_configrations['data']['num_workers'])
-        #self.x_std=x_std
+
         return lafan_loader_train
 
 
     def predict(self,lafan_dataset):
         lafan_dataloader= self.create_dataloader(lafan_dataset)
         self.set_eval_mode()
+
         for i_batch, sampled_batch in enumerate(lafan_dataloader):
             with torch.no_grad():
 
@@ -154,7 +239,8 @@ class Model:
         bvh_list = []
         bvh_list.append(torch.cat([X[:, 0, 0], local_q[:, 0, ].view(local_q.size(0), -1)], -1))
         contact_list.append(contact[:, 0])
-
+        if self.train_mode:
+            pred_list.append(X[:, 0])
 
 
         for t in range(seq_length-1):
@@ -224,9 +310,15 @@ class Model:
                                                                                 0]) / seq_length  # opt['model']['seq_length']
                 loss_contact += torch.mean(torch.abs(
                     contact_pred[0] - contact_next)) / seq_length  # opt['model']['seq_length']
-            pred_list.append(np.concatenate([X[0, 0].view(22, 3).detach().cpu().numpy(), \
-                                      pos_pred[0].view(22, 3).detach().cpu().numpy(), \
-                                      X[0, -1].view(22, 3).detach().cpu().numpy()], 0))
+            if self.train_mode:
+                pred_list.append(pos_pred[0])
+
+            else:
+
+                pred_list.append(np.concatenate([X[0, 0].view(22, 3).detach().cpu().numpy(), \
+                                          pos_pred[0,0].view(22, 3).detach().cpu().numpy(), \
+                                          X[0, -1].view(22, 3).detach().cpu().numpy()], 0))
+
             contact_list.append(contact_pred[0])
 
         return (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root)
