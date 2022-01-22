@@ -9,7 +9,6 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 import torch.optim as optim
 from tqdm import tqdm
-
 from src.features.LaFan import LaFan1
 from src.features.remove_fs import remove_fs
 from src.models.components import StateEncoder, OffsetEncoder, TargetEncoder, LSTM, Decoder, ShortMotionDiscriminator, \

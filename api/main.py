@@ -11,10 +11,10 @@ from src.utils import get_project_path
 from api.model.inference import InferModel
 ROOT_PATH=get_project_path()
 app = FastAPI()
-app.mount("/static/", StaticFiles(directory="static"), name="static")
-app.mount("/results/", StaticFiles(directory="results"), name="results")
+app.mount("/static/", StaticFiles(directory=os.path.join(ROOT_PATH,"api/static")), name="static")
+app.mount("/results/", StaticFiles(directory=os.path.join(ROOT_PATH,"api/results")), name="results")
 inference_model=InferModel()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=os.path.join(ROOT_PATH,"api/templates"))
 
 
 @app.get("/")
@@ -45,7 +45,7 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
     filename = 'test_013.bvh'
 
 
-    return templates.TemplateResponse("index.html", {"request": request, "gif_src": gif_src, "filename": filename})
+    return templates.TemplateResponse("api/templates/index.html", {"request": request, "gif_src": gif_src, "filename": filename})
 
 
 @app.get("/download/{filename}")

@@ -6,8 +6,8 @@ model:
     lstm_dim: 768
     num_joints: 22
 data:
-    data_dir: '../../data/raw/lafan1'
-    proc_dir: '../../data/processed/processed_data.h5'
+    data_dir: 'data/raw/lafan1'
+    proc_dir: 'data/processed/processed_data.h5'
     offsets: [
        [-42.198200,91.614723,-40.067841],
        [ 0.103456,1.857829,10.548506],
