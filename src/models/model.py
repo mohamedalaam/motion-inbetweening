@@ -36,6 +36,7 @@ class Model:
         self.skeleton_mocap.remove_joints(self.test_configrations['data']['joints_to_remove'])
 
     def set_train_mode(self):
+        self.ztta = gen_ztta(length=self.train_configrations['model']['seq_length']).cuda()
         self.train_mode = True
         self.state_encoder.train()
         self.offset_encoder.train()
@@ -44,6 +45,7 @@ class Model:
         self.decoder.train()
 
     def set_eval_mode(self):
+        self.ztta = gen_ztta(length=self.test_configrations['model']['seq_length']).cuda()
         self.train_mode = False
         self.state_encoder.eval()
         self.offset_encoder.eval()
@@ -64,7 +66,7 @@ class Model:
         decoder = Decoder(in_dim=self.train_configrations['model']['lstm_dim'] * 2,
                           out_dim=self.train_configrations['model']['state_input_dim'])
         self.decoder = decoder.cuda()
-        self.ztta = gen_ztta().cuda()
+
         short_discriminator = ShortMotionDiscriminator(in_dim=(self.train_configrations['model']['num_joints'] * 3 * 2))
         self.short_discriminator = short_discriminator.cuda()
         long_discriminator = LongMotionDiscriminator(in_dim=(self.train_configrations['model']['num_joints'] * 3 * 2))
@@ -211,7 +213,7 @@ class Model:
         self.x_std = dataset.x_std.cuda().view(1, 1, self.train_configrations['model']['num_joints'], 3)
         lafan_loader_train = DataLoader(dataset, \
                                         batch_size=self.train_configrations['train']['batch_size'], \
-                                        shuffle=True, num_workers=self.train_configrations['data']['num_workers'])
+                                        shuffle=False, num_workers=self.train_configrations['data']['num_workers'])
 
         return lafan_loader_train
 
@@ -219,12 +221,21 @@ class Model:
     def predict(self,lafan_dataset):
         lafan_dataloader= self.create_dataloader(lafan_dataset)
         self.set_eval_mode()
-
+        c=[]
+        p=[]
+        b=[]
         for i_batch, sampled_batch in enumerate(lafan_dataloader):
             with torch.no_grad():
 
-                (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root) =self.generate_seq(sampled_batch)
-                self.save_results(contact_list=contact_list,pred_list=pred_list,bvh_list=bvh_list,i_batch=i_batch)
+
+                (pred_list,bvh_list, contact_list), (loss_pos, loss_quat, loss_contact, loss_root) =self.generate_seq(sampled_batch,self.test_configrations['model']['seq_length'])
+                if len(b) != 0:
+                    bvh_list[0]=b[-1]
+                b+=bvh_list
+                p+=pred_list
+                c+=contact_list
+
+        self.save_results(contact_list=c,pred_list=p,bvh_list=b,i_batch=i_batch)
 
 
 
@@ -364,7 +375,7 @@ class Model:
             self.plot_pose(frame,path_to_save)
             pred_img = Image.open( path_to_save+'image.png', 'r')
             img_list.append(np.array(pred_img))
-        imageio.mimsave(path_to_save+'/animation.gif', img_list, duration=0.1)
+        imageio.mimsave(path_to_save+'animation.gif', img_list, duration=0.1)
 
     def save_bvh(self,contact_list, bvh_list,i_batch,path_to_save):
         bs=0
@@ -378,12 +389,12 @@ class Model:
         foot[foot > 0.5] = 1.0
         foot[foot <= 0.5] = 0.0
 
-        glb = remove_fs((path_to_save+'/test_%03d.bvh' % i_batch), \
-                        foot, \
-                        fid_l=(3, 4), \
-                        fid_r=(7, 8), \
-                        output_path=(
-                                    path_to_save+'/test_%03d.bvh' % i_batch))
+        # glb = remove_fs((path_to_save+'/test_%03d.bvh' % i_batch), \
+        #                 foot, \
+        #                 fid_l=(3, 4), \
+        #                 fid_r=(7, 8), \
+        #                 output_path=(
+        #                             path_to_save+'/test_%03d.bvh' % i_batch))
 
     def plot_pose(self,pose, prefix):
 
@@ -430,7 +441,7 @@ class Model:
             os.mkdir(self.results_path+'/bvh')
             os.mkdir(self.results_path+'/gif')
         if self.test_configrations['test']['save_gif']:
-            self.save_gif(pred_list,self.results_path+'/gif')
+            self.save_gif(pred_list,self.results_path+'/gif'+'/')
         if self.test_configrations['test']['save_bvh']:
             self.save_bvh(contact_list,bvh_list,i_batch,self.results_path+'/bvh')
 

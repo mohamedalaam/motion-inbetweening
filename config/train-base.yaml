@@ -65,7 +65,6 @@ train:
     weight_decay: 0.00001
     use_ztta: True
     use_adv: True
-    debug: False
     method: ''
     pretrained:
     progressive_training: False

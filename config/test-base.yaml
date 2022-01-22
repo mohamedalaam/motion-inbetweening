@@ -1,5 +1,5 @@
 model:
-    seq_length: 50
+    seq_length: 40
     state_input_dim: 95
     offset_input_dim: 91
     target_input_dim: 88

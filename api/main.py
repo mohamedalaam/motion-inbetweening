@@ -42,7 +42,7 @@ async def create_upload_file(request: Request, file: UploadFile = File(...)):
     # Use bvh function
 
     gif_src = "animation.gif"
-    filename = 'test_000.bvh'
+    filename = 'test_013.bvh'
 
 
     return templates.TemplateResponse("index.html", {"request": request, "gif_src": gif_src, "filename": filename})

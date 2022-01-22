@@ -46,10 +46,11 @@ class LaFan1(Dataset):
         q, x = utils.quat_fk(anim.quats[:], anim.pos[:], anim.parents)
         # Extract contacts
         c_l, c_r = utils.extract_feet_contacts(x, [3, 4], [7, 8], velfactor=0.02)
-        anim.pos=anim.pos[np.newaxis,:,:,:]
-        anim.quats=anim.quats[np.newaxis,:,:,:]
-        c_l=c_l[np.newaxis,:,:]
-        c_r=c_r[np.newaxis,:,:]
+        seq_no=len(anim.pos)//2
+        anim.pos=anim.pos.reshape(seq_no,2,-1,3)
+        anim.quats=anim.quats.reshape(seq_no,2,-1,4)
+        c_l=c_l.reshape(seq_no,2,2)
+        c_r=c_r.reshape(seq_no,2,2)
         return anim.pos, anim.quats, anim.parents, c_l, c_r
 
 
@@ -85,6 +86,7 @@ class LaFan1(Dataset):
         input_ = {}
         # The following features are inputs:
         # 1. local quaternion vector (J * 4d)
+        
         input_['local_q'] = Q
         
         # 2. global root velocity vector (3d)
